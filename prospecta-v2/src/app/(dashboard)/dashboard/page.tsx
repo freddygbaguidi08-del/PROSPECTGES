@@ -80,7 +80,7 @@ export default async function DashboardPage() {
         <div className="bg-white rounded-2xl border border-slate-200/80 p-5">
           <h3 className="font-semibold text-slate-900 mb-4">Prospects par statut</h3>
           <div className="space-y-2.5">
-            {(data?.byStatus ?? []).map((s: { status: string; count: string }) => {
+            {(data?.byStatus ?? [] as Array<{ status: string; count: string }>).map((s) => {
               const total = Number(data?.prospects?.total ?? 1);
               const pct = Math.round((Number(s.count) / total) * 100);
               const cfg = STATUS[s.status] ?? { label: s.status, color: 'bg-slate-100 text-slate-600' };
