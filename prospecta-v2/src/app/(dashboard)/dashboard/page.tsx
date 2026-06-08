@@ -2,10 +2,11 @@ import { getSession } from '@/lib/auth';
 import { fmt, STATUS, scoreColor } from '@/lib/utils';
 import { Users, Mail, TrendingUp, DollarSign, ArrowUpRight } from 'lucide-react';
 
+type StatusRow = { status: string; count: string };
+type RecentRow = { first_name: string; last_name: string; company: string; score: number; status: string; created_at: string };
+
 async function getDashboardData(userId: string) {
-  const base = process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
   try {
-    // Direct DB call to avoid fetch auth issues in server component
     const sql = (await import('@/lib/db')).default;
     const { initDB } = await import('@/lib/db');
     await initDB();
@@ -18,7 +19,13 @@ async function getDashboardData(userId: string) {
       sql`SELECT first_name, last_name, company, score, status, created_at FROM prospects WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 5`,
     ]);
 
-    return { prospects: prospects[0], campaigns: campaigns[0], deals: deals[0], byStatus, recent };
+    return {
+      prospects: prospects[0] as Record<string, string>,
+      campaigns: campaigns[0] as Record<string, string>,
+      deals: deals[0] as Record<string, string>,
+      byStatus: byStatus as StatusRow[],
+      recent: recent as RecentRow[],
+    };
   } catch {
     return null;
   }
@@ -56,12 +63,11 @@ export default async function DashboardPage() {
         <p className="text-slate-500 text-sm mt-1">Voici un aperçu de votre activité commerciale</p>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map(k => {
           const Icon = k.icon;
           return (
-            <div key={k.label} className="bg-white rounded-2xl border border-slate-200/80 p-5 hover:shadow-md hover:shadow-slate-200/50 transition-shadow">
+            <div key={k.label} className="bg-white rounded-2xl border border-slate-200/80 p-5 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between mb-3">
                 <div className={`p-2.5 rounded-xl ${colors[k.color]}`}>
                   <Icon className="w-5 h-5" />
@@ -76,11 +82,10 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Prospects by status */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-5">
           <h3 className="font-semibold text-slate-900 mb-4">Prospects par statut</h3>
           <div className="space-y-2.5">
-            {(data?.byStatus ?? [] as Array<{ status: string; count: string }>).map((s) => {
+            {(data?.byStatus ?? []).map((s: StatusRow) => {
               const total = Number(data?.prospects?.total ?? 1);
               const pct = Math.round((Number(s.count) / total) * 100);
               const cfg = STATUS[s.status] ?? { label: s.status, color: 'bg-slate-100 text-slate-600' };
@@ -102,7 +107,6 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Recent prospects */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-slate-900">Derniers prospects</h3>
@@ -111,7 +115,7 @@ export default async function DashboardPage() {
             </a>
           </div>
           <div className="space-y-3">
-            {(data?.recent ?? []).map((p: { first_name: string; last_name: string; company: string; score: number; status: string; created_at: string }, i: number) => (
+            {(data?.recent ?? []).map((p: RecentRow, i: number) => (
               <div key={i} className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
                   {p.first_name[0]}{p.last_name[0]}
@@ -130,7 +134,6 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Quick actions */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-5">
         <h3 className="font-semibold text-slate-900 mb-4">Actions rapides</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
