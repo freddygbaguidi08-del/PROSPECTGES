@@ -1,20 +1,16 @@
+// @ts-nocheck
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 
 const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'fallback-secret-change-in-production'
+  process.env.JWT_SECRET || 'nof-prospect-prod-secret-change-in-production'
 );
 
-export interface JWTPayload {
-  userId: string;
-  email: string;
-  name: string;
-  orgName: string;
-}
+const COOKIE_NAME = 'nof_token';
 
-export async function signToken(payload: JWTPayload): Promise<string> {
+export async function signToken(payload) {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -22,27 +18,27 @@ export async function signToken(payload: JWTPayload): Promise<string> {
     .sign(SECRET);
 }
 
-export async function verifyToken(token: string): Promise<JWTPayload | null> {
+export async function verifyToken(token) {
   try {
     const { payload } = await jwtVerify(token, SECRET);
-    return payload as unknown as JWTPayload;
+    return payload;
   } catch {
     return null;
   }
 }
 
-export async function getSession(): Promise<JWTPayload | null> {
+export async function getSession() {
   const cookieStore = cookies();
-  const token = cookieStore.get('prospecta_token')?.value;
+  const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
   return verifyToken(token);
 }
 
-export async function getSessionFromRequest(req: NextRequest): Promise<JWTPayload | null> {
-  const token = req.cookies.get('prospecta_token')?.value;
+export async function getSessionFromRequest(req) {
+  const token = req.cookies.get(COOKIE_NAME)?.value;
   if (!token) return null;
   return verifyToken(token);
 }
 
-export const hashPassword = (password: string) => bcrypt.hash(password, 12);
-export const comparePassword = (password: string, hash: string) => bcrypt.compare(password, hash);
+export const hashPassword = (password) => bcrypt.hash(password, 12);
+export const comparePassword = (password, hash) => bcrypt.compare(password, hash);

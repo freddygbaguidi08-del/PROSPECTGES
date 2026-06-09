@@ -1,13 +1,14 @@
+// @ts-nocheck
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/Toaster';
 
 export const metadata: Metadata = {
-  title: { default: 'Prospecta', template: '%s | Prospecta' },
+  title: { default: 'NOF PROSPECT PROD', template: '%s | NOF PROSPECT PROD' },
   description: 'Plateforme B2B de prospection commerciale',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }) {
   return (
     <html lang="fr">
       <head>

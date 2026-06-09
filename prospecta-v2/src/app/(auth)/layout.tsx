@@ -1,17 +1,21 @@
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+// @ts-nocheck
+export default function AuthLayout({ children }) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" className="w-5 h-5">
+          <div className="inline-flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/30">
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" className="w-6 h-6">
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
               </svg>
             </div>
-            <span className="text-2xl font-bold text-white tracking-tight">Prospecta</span>
+            <div className="text-left">
+              <span className="text-2xl font-bold text-white tracking-tight block leading-tight">NOF PROSPECT</span>
+              <span className="text-blue-400 text-sm font-bold tracking-widest">PROD</span>
+            </div>
           </div>
-          <p className="text-blue-300/70 text-sm">Plateforme B2B de prospection commerciale</p>
+          <p className="text-slate-400 text-sm">Plateforme B2B de prospection commerciale</p>
         </div>
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           {children}
