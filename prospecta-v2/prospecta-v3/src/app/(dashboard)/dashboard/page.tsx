@@ -1,0 +1,146 @@
+// @ts-nocheck
+import { getSession } from '@/lib/auth';
+import { fmt, STATUS, scoreColor } from '@/lib/utils';
+import { Users, Mail, TrendingUp, DollarSign, ArrowUpRight } from 'lucide-react';
+
+async function getDashboardData(userId) {
+  try {
+    const sql = (await import('@/lib/db')).default;
+    const { initDB } = await import('@/lib/db');
+    await initDB();
+    const [prospects, campaigns, deals, byStatus, recent] = await Promise.all([
+      sql`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE created_at >= date_trunc('month', NOW())) as this_month, ROUND(AVG(score)) as avg_score FROM prospects WHERE user_id = ${userId}`,
+      sql`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'RUNNING') as running FROM campaigns WHERE user_id = ${userId}`,
+      sql`SELECT COUNT(*) as total, COALESCE(SUM(value) FILTER (WHERE stage = 'CLOSED_WON'), 0) as won_value, COALESCE(SUM(value) FILTER (WHERE stage NOT IN ('CLOSED_WON','CLOSED_LOST')), 0) as pipeline FROM deals WHERE user_id = ${userId}`,
+      sql`SELECT status, COUNT(*) as count FROM prospects WHERE user_id = ${userId} GROUP BY status`,
+      sql`SELECT first_name, last_name, company, score, status, created_at FROM prospects WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 5`,
+    ]);
+    return { prospects: prospects[0], campaigns: campaigns[0], deals: deals[0], byStatus, recent };
+  } catch { return null; }
+}
+
+export default async function DashboardPage() {
+  const session = await getSession();
+  const data = session ? await getDashboardData(session.userId) : null;
+
+  const kpis = [
+    { label: 'Total prospects', value: fmt.number(Number(data?.prospects?.total ?? 0)), sub: `+${data?.prospects?.this_month ?? 0} ce mois`, icon: Users, color: 'blue' },
+    { label: 'Campagnes actives', value: String(data?.campaigns?.running ?? 0), sub: `${data?.campaigns?.total ?? 0} au total`, icon: Mail, color: 'green' },
+    { label: 'Score moyen', value: `${data?.prospects?.avg_score ?? 0}/100`, sub: 'Qualité des prospects', icon: TrendingUp, color: 'amber' },
+    { label: 'Pipeline', value: fmt.currency(Number(data?.deals?.pipeline ?? 0)), sub: `${fmt.currency(Number(data?.deals?.won_value ?? 0))} gagnés`, icon: DollarSign, color: 'purple' },
+  ];
+
+  const colors = {
+    blue: 'bg-blue-50 text-blue-600',
+    green: 'bg-emerald-50 text-emerald-600',
+    amber: 'bg-amber-50 text-amber-600',
+    purple: 'bg-purple-50 text-purple-600',
+  };
+
+  const getHour = () => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Bonjour';
+    if (h < 18) return 'Bon après-midi';
+    return 'Bonsoir';
+  };
+
+  const byStatusList = Array.isArray(data?.byStatus) ? data.byStatus : [];
+  const recentList = Array.isArray(data?.recent) ? data.recent : [];
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">{getHour()}, {session?.name.split(' ')[0]} 👋</h1>
+        <p className="text-slate-500 text-sm mt-1">Voici un aperçu de votre activité commerciale</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpis.map(k => {
+          const Icon = k.icon;
+          return (
+            <div key={k.label} className="card p-5 card-hover">
+              <div className="flex items-start justify-between mb-4">
+                <div className={`p-2.5 rounded-xl ${colors[k.color]}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">{k.value}</p>
+              <p className="text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wide">{k.label}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{k.sub}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="card p-5">
+          <h3 className="font-semibold text-slate-900 mb-4">Prospects par statut</h3>
+          <div className="space-y-3">
+            {byStatusList.map((s, i) => {
+              const total = Number(data?.prospects?.total ?? 1);
+              const pct = Math.round((Number(s.count) / total) * 100);
+              const cfg = STATUS[s.status] ?? { label: s.status, color: 'bg-slate-100 text-slate-600' };
+              return (
+                <div key={i}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={`badge ${cfg.color}`}>{cfg.label}</span>
+                    <span className="text-sm font-bold text-slate-700">{s.count} <span className="text-slate-400 font-normal text-xs">({pct}%)</span></span>
+                  </div>
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+            {byStatusList.length === 0 && <p className="text-slate-400 text-sm text-center py-8">Aucun prospect encore</p>}
+          </div>
+        </div>
+
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-slate-900">Derniers prospects</h3>
+            <a href="/prospects" className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium">
+              Voir tous <ArrowUpRight className="w-3 h-3" />
+            </a>
+          </div>
+          <div className="space-y-3">
+            {recentList.map((p, i) => (
+              <div key={i} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition-colors">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm shadow-blue-200">
+                  {p.first_name[0]}{p.last_name[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 truncate">{p.first_name} {p.last_name}</p>
+                  <p className="text-xs text-slate-400 truncate">{p.company ?? '—'}</p>
+                </div>
+                <span className={`badge ring-1 ${scoreColor(p.score)}`}>{p.score}</span>
+              </div>
+            ))}
+            {recentList.length === 0 && <p className="text-slate-400 text-sm text-center py-8">Aucun prospect encore</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="card p-5">
+        <h3 className="font-semibold text-slate-900 mb-4">Actions rapides</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: 'Ajouter un prospect', href: '/prospects', emoji: '👤', desc: 'Créer manuellement' },
+            { label: 'Nouvelle campagne', href: '/campaigns', emoji: '📧', desc: 'Avec IA' },
+            { label: 'Créer un deal', href: '/pipeline', emoji: '💼', desc: 'Pipeline CRM' },
+            { label: 'Rechercher', href: '/search', emoji: '🔍', desc: 'Trouver des prospects' },
+          ].map(a => (
+            <a key={a.label} href={a.href}
+              className="flex flex-col items-center gap-2 p-4 bg-slate-50 rounded-xl hover:bg-blue-50 hover:border-blue-200 border border-transparent transition-all text-center card-hover">
+              <span className="text-3xl">{a.emoji}</span>
+              <div>
+                <p className="text-xs font-semibold text-slate-700">{a.label}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{a.desc}</p>
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
