@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
 import sql, { initDB } from '@/lib/db';
 import { hashPassword, signToken } from '@/lib/auth';

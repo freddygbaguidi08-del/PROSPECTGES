@@ -39,7 +39,8 @@ export async function POST(req) {
 
   const [deal] = await sql`
     INSERT INTO deals (user_id, prospect_id, title, value, currency, stage, probability, notes)
-    VALUES (${session.userId}, ${body.prospectId ?? null}, ${body.title}, ${body.value ?? 0}, ${body.currency ?? 'EUR'}, ${stage}, ${prob}, ${body.notes ?? null})
+    VALUES (${session.userId}, ${body.prospectId ?? null}, ${body.title}, ${body.value ?? 0},
+      ${body.currency ?? 'EUR'}, ${stage}, ${prob}, ${body.notes ?? null})
     RETURNING *
   `;
   return NextResponse.json({ data: deal }, { status: 201 });
