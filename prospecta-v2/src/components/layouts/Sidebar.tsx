@@ -1,13 +1,15 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, Mail, Kanban, BarChart3, Settings, Zap, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Mail, Kanban, BarChart3, Settings, Zap, LogOut, Inbox, Search } from 'lucide-react';
 import { cn, fmt } from '@/lib/utils';
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/prospects', label: 'Prospects', icon: Users },
+  { href: '/search', label: 'Recherche prospects', icon: Search },
   { href: '/campaigns', label: 'Campagnes', icon: Mail },
+  { href: '/inbox', label: "Boîte d'envoi", icon: Inbox },
   { href: '/pipeline', label: 'Pipeline CRM', icon: Kanban },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/settings', label: 'Paramètres', icon: Settings },
@@ -35,7 +37,7 @@ export function Sidebar({ user }: { user: { name: string; email: string; orgName
         <p className="text-slate-500 text-xs mt-1.5 truncate">{user.orgName}</p>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {nav.map(({ href, label, icon: Icon }) => {
           const active = href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href);
           return (
