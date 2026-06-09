@@ -1,43 +1,20 @@
-// @ts-nocheck
 import postgres from 'postgres';
 
-let sql: any = null;
-
-function getSQL() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL non configurée');
-  }
-  if (!sql) {
-    sql = postgres(process.env.DATABASE_URL, {
-      ssl: 'require',
-      max: 10,
-      idle_timeout: 20,
-      connect_timeout: 10,
-    });
-  }
-  return sql;
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is not set');
 }
 
-export default new Proxy({} as any, {
-  get(_target, prop) {
-    const s = getSQL();
-    return s[prop];
-  },
-  apply(_target, _this, args) {
-    const s = getSQL();
-    return s(...args);
-  }
+const sql = postgres(process.env.DATABASE_URL, {
+  ssl: 'require',
+  max: 10,
+  idle_timeout: 20,
+  connect_timeout: 10,
 });
 
+export default sql;
+
 export async function initDB() {
-  if (!process.env.DATABASE_URL) {
-    console.warn('DATABASE_URL non configurée - base de données non initialisée');
-    return;
-  }
-
-  const s = getSQL();
-
-  await s`CREATE TABLE IF NOT EXISTS users (
+  await sql`CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
@@ -47,7 +24,7 @@ export async function initDB() {
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`;
 
-  await s`CREATE TABLE IF NOT EXISTS prospects (
+  await sql`CREATE TABLE IF NOT EXISTS prospects (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     first_name TEXT NOT NULL,
@@ -71,7 +48,7 @@ export async function initDB() {
     updated_at TIMESTAMPTZ DEFAULT NOW()
   )`;
 
-  await s`CREATE TABLE IF NOT EXISTS campaigns (
+  await sql`CREATE TABLE IF NOT EXISTS campaigns (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -83,7 +60,7 @@ export async function initDB() {
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`;
 
-  await s`CREATE TABLE IF NOT EXISTS campaign_steps (
+  await sql`CREATE TABLE IF NOT EXISTS campaign_steps (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
     step_order INTEGER NOT NULL,
@@ -93,7 +70,7 @@ export async function initDB() {
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`;
 
-  await s`CREATE TABLE IF NOT EXISTS email_logs (
+  await sql`CREATE TABLE IF NOT EXISTS email_logs (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     user_id TEXT NOT NULL,
     campaign_id TEXT REFERENCES campaigns(id),
@@ -105,7 +82,7 @@ export async function initDB() {
     sent_at TIMESTAMPTZ DEFAULT NOW()
   )`;
 
-  await s`CREATE TABLE IF NOT EXISTS deals (
+  await sql`CREATE TABLE IF NOT EXISTS deals (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     prospect_id TEXT REFERENCES prospects(id),
@@ -118,6 +95,4 @@ export async function initDB() {
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
   )`;
-
-  console.log('✅ Database tables ready');
 }
