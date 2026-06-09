@@ -1,13 +1,13 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, Mail, Kanban, BarChart3, Settings, Zap, LogOut, Inbox, Search } from 'lucide-react';
+import { LayoutDashboard, Users, Mail, Kanban, BarChart3, Settings, Zap, LogOut, Inbox, Search, Shield } from 'lucide-react';
 import { cn, fmt } from '@/lib/utils';
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/prospects', label: 'Prospects', icon: Users },
-  { href: '/search', label: 'Recherche prospects', icon: Search },
+  { href: '/search', label: 'Recherche', icon: Search },
   { href: '/campaigns', label: 'Campagnes', icon: Mail },
   { href: '/inbox', label: "Boîte d'envoi", icon: Inbox },
   { href: '/pipeline', label: 'Pipeline CRM', icon: Kanban },
@@ -15,7 +15,7 @@ const nav = [
   { href: '/settings', label: 'Paramètres', icon: Settings },
 ];
 
-export function Sidebar({ user }: { user: { name: string; email: string; orgName: string } }) {
+export function Sidebar({ user }: { user: { name: string; email: string; orgName: string; role?: string } }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -49,6 +49,18 @@ export function Sidebar({ user }: { user: { name: string; email: string; orgName
             </Link>
           );
         })}
+
+        {/* Admin link - visible only for ADMIN role */}
+        {user.role === 'ADMIN' && (
+          <div className="pt-2 mt-2 border-t border-slate-800">
+            <Link href="/admin"
+              className={cn('flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                pathname.startsWith('/admin') ? 'bg-red-600 text-white' : 'text-red-400 hover:text-white hover:bg-red-900/30')}>
+              <Shield className="w-4 h-4 shrink-0" />
+              Espace Admin
+            </Link>
+          </div>
+        )}
       </nav>
 
       <div className="px-3 py-4 border-t border-slate-800">
@@ -58,7 +70,7 @@ export function Sidebar({ user }: { user: { name: string; email: string; orgName
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white truncate">{user.name}</p>
-            <p className="text-xs text-slate-500 truncate">{user.email}</p>
+            <p className="text-xs text-slate-500 truncate">{user.role || 'USER'}</p>
           </div>
           <button onClick={logout} className="text-slate-600 hover:text-red-400 transition" title="Déconnexion">
             <LogOut className="w-4 h-4" />
