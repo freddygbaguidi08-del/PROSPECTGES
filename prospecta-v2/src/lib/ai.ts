@@ -1,3 +1,4 @@
+// @ts-nocheck
 export async function generateEmail(opts: {
   prospectName: string;
   company: string;

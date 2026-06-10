@@ -2,6 +2,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { Sidebar } from '@/components/layouts/Sidebar';
+import { SpaceBackground } from '@/components/ui/SpaceBackground';
 
 export default async function DashboardLayout({ children }) {
   const session = await getSession();
@@ -15,10 +16,11 @@ export default async function DashboardLayout({ children }) {
   } catch { }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div style={{ display: 'flex', height: '100vh', background: '#080c14', overflow: 'hidden', position: 'relative' }}>
+      <SpaceBackground />
       <Sidebar user={{ name: session.name, email: session.email, orgName: session.orgName, role }} />
-      <main className="flex-1 overflow-y-auto scrollbar-thin">
-        <div className="p-6 max-w-7xl mx-auto animate-fade-in">
+      <main style={{ flex: 1, overflowY: 'auto', position: 'relative', zIndex: 1 }}>
+        <div style={{ padding: 24, maxWidth: 1280, margin: '0 auto' }} className="animate-fade-in">
           {children}
         </div>
       </main>

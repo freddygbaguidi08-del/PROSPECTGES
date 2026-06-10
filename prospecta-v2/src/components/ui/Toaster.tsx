@@ -1,110 +1,69 @@
+// @ts-nocheck
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
+export interface Toast { id: string; message: string; type: ToastType; }
 
-export interface Toast {
-  id: string;
-  message: string;
-  type: ToastType;
-  duration?: number;
-}
-
-type ToastListener = (toasts: Toast[]) => void;
-
-// Global toast state
 let toasts: Toast[] = [];
-const listeners: ToastListener[] = [];
-
+const listeners: Array<(t: Toast[]) => void> = [];
 const notify = () => listeners.forEach(l => l([...toasts]));
 
 export const toast = {
-  success: (message: string, duration = 4000) => {
-    const id = Math.random().toString(36).slice(2);
-    toasts = [...toasts, { id, message, type: 'success', duration }];
-    notify();
-    setTimeout(() => { toasts = toasts.filter(t => t.id !== id); notify(); }, duration);
-  },
-  error: (message: string, duration = 5000) => {
-    const id = Math.random().toString(36).slice(2);
-    toasts = [...toasts, { id, message, type: 'error', duration }];
-    notify();
-    setTimeout(() => { toasts = toasts.filter(t => t.id !== id); notify(); }, duration);
-  },
-  warning: (message: string, duration = 4000) => {
-    const id = Math.random().toString(36).slice(2);
-    toasts = [...toasts, { id, message, type: 'warning', duration }];
-    notify();
-    setTimeout(() => { toasts = toasts.filter(t => t.id !== id); notify(); }, duration);
-  },
-  info: (message: string, duration = 4000) => {
-    const id = Math.random().toString(36).slice(2);
-    toasts = [...toasts, { id, message, type: 'info', duration }];
-    notify();
-    setTimeout(() => { toasts = toasts.filter(t => t.id !== id); notify(); }, duration);
-  },
+  success: (message: string, ms = 4000) => add(message, 'success', ms),
+  error: (message: string, ms = 5000) => add(message, 'error', ms),
+  warning: (message: string, ms = 4000) => add(message, 'warning', ms),
+  info: (message: string, ms = 4000) => add(message, 'info', ms),
 };
 
-const icons = {
-  success: CheckCircle,
-  error: XCircle,
-  warning: AlertTriangle,
-  info: Info,
-};
+function add(message: string, type: ToastType, ms: number) {
+  const id = Math.random().toString(36).slice(2);
+  toasts = [...toasts, { id, message, type }];
+  notify();
+  setTimeout(() => { toasts = toasts.filter(t => t.id !== id); notify(); }, ms);
+}
 
-const styles = {
-  success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
-  error: 'bg-red-50 border-red-200 text-red-800',
-  warning: 'bg-amber-50 border-amber-200 text-amber-800',
-  info: 'bg-blue-50 border-blue-200 text-blue-800',
-};
-
-const iconStyles = {
-  success: 'text-emerald-500',
-  error: 'text-red-500',
-  warning: 'text-amber-500',
-  info: 'text-blue-500',
+const iconMap = { success: CheckCircle, error: XCircle, warning: AlertTriangle, info: Info };
+const colorMap = {
+  success: { bg: 'rgba(74,222,128,.12)', border: 'rgba(74,222,128,.3)', icon: '#4ade80' },
+  error: { bg: 'rgba(248,113,113,.12)', border: 'rgba(248,113,113,.3)', icon: '#f87171' },
+  warning: { bg: 'rgba(251,191,36,.12)', border: 'rgba(251,191,36,.3)', icon: '#fbbf24' },
+  info: { bg: 'rgba(59,130,246,.12)', border: 'rgba(59,130,246,.3)', icon: '#60a5fa' },
 };
 
 export function Toaster() {
-  const [activeToasts, setActiveToasts] = useState<Toast[]>([]);
-
+  const [active, setActive] = useState<Toast[]>([]);
   useEffect(() => {
-    const listener = (t: Toast[]) => setActiveToasts(t);
-    listeners.push(listener);
-    return () => {
-      const idx = listeners.indexOf(listener);
-      if (idx > -1) listeners.splice(idx, 1);
-    };
+    const fn = (t: Toast[]) => setActive(t);
+    listeners.push(fn);
+    return () => { const i = listeners.indexOf(fn); if (i > -1) listeners.splice(i, 1); };
   }, []);
 
-  const dismiss = useCallback((id: string) => {
-    toasts = toasts.filter(t => t.id !== id);
-    notify();
-  }, []);
+  const dismiss = useCallback((id: string) => { toasts = toasts.filter(t => t.id !== id); notify(); }, []);
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
-      {activeToasts.map(t => {
-        const Icon = icons[t.type];
+    <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 360, pointerEvents: 'none' }}>
+      {active.map(t => {
+        const Icon = iconMap[t.type];
+        const c = colorMap[t.type];
         return (
-          <div
-            key={t.id}
-            className={cn(
-              'flex items-start gap-3 p-4 rounded-2xl border shadow-xl backdrop-blur-sm pointer-events-auto',
-              'animate-in slide-in-from-right-full duration-300',
-              styles[t.type]
-            )}
-          >
-            <Icon className={cn('w-5 h-5 shrink-0 mt-0.5', iconStyles[t.type])} />
-            <p className="text-sm font-medium flex-1 leading-relaxed">{t.message}</p>
-            <button
-              onClick={() => dismiss(t.id)}
-              className="shrink-0 opacity-50 hover:opacity-100 transition-opacity mt-0.5"
-            >
-              <X className="w-4 h-4" />
+          <div key={t.id} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            padding: '12px 14px',
+            background: c.bg,
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: `1px solid ${c.border}`,
+            borderRadius: 12,
+            boxShadow: '0 8px 32px rgba(0,0,0,.5)',
+            pointerEvents: 'all',
+            animation: 'slideInRight .3s ease-out',
+          }}>
+            <Icon style={{ width: 16, height: 16, color: c.icon, marginTop: 1, flexShrink: 0 }} />
+            <p style={{ fontSize: 13, color: '#f0f9ff', flex: 1, lineHeight: '1.5' }}>{t.message}</p>
+            <button onClick={() => dismiss(t.id)} style={{ color: 'rgba(255,255,255,.4)', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0, marginTop: 1 }}>
+              <X style={{ width: 14, height: 14 }} />
             </button>
           </div>
         );

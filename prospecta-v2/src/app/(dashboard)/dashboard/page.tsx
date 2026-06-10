@@ -1,9 +1,8 @@
 // @ts-nocheck
 import { getSession } from '@/lib/auth';
 import { fmt, STATUS, scoreColor } from '@/lib/utils';
-import { Users, Mail, TrendingUp, DollarSign, ArrowUpRight } from 'lucide-react';
 
-async function getDashboardData(userId) {
+async function getData(userId) {
   try {
     const sql = (await import('@/lib/db')).default;
     const { initDB } = await import('@/lib/db');
@@ -13,129 +12,143 @@ async function getDashboardData(userId) {
       sql`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'RUNNING') as running FROM campaigns WHERE user_id = ${userId}`,
       sql`SELECT COUNT(*) as total, COALESCE(SUM(value) FILTER (WHERE stage = 'CLOSED_WON'), 0) as won_value, COALESCE(SUM(value) FILTER (WHERE stage NOT IN ('CLOSED_WON','CLOSED_LOST')), 0) as pipeline FROM deals WHERE user_id = ${userId}`,
       sql`SELECT status, COUNT(*) as count FROM prospects WHERE user_id = ${userId} GROUP BY status`,
-      sql`SELECT first_name, last_name, company, score, status, created_at FROM prospects WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 5`,
+      sql`SELECT first_name, last_name, company, score, status, created_at FROM prospects WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 6`,
     ]);
-    return { prospects: prospects[0], campaigns: campaigns[0], deals: deals[0], byStatus, recent };
+    return { p: prospects[0], c: campaigns[0], d: deals[0], byStatus, recent };
   } catch { return null; }
 }
 
+const S = {
+  card: { background: 'rgba(255,255,255,.06)', backdropFilter: 'blur(24px) saturate(180%)', WebkitBackdropFilter: 'blur(24px) saturate(180%)', border: '0.5px solid rgba(255,255,255,.10)', borderRadius: 14, boxShadow: '0 8px 32px rgba(0,0,0,.4), 0 1px 0 rgba(255,255,255,.08) inset' },
+  h1: { fontSize: 20, fontWeight: 700, color: '#f0f9ff', letterSpacing: '-.2px' },
+  h3: { fontSize: 13, fontWeight: 600, color: '#f0f9ff', letterSpacing: '-.2px', marginBottom: 16 },
+  txt2: { color: 'rgba(255,255,255,.55)' },
+  label: { fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,.4)', textTransform: 'uppercase', letterSpacing: '.5px' },
+};
+
 export default async function DashboardPage() {
   const session = await getSession();
-  const data = session ? await getDashboardData(session.userId) : null;
+  const data = session ? await getData(session.userId) : null;
+
+  const h = new Date().getHours();
+  const greeting = h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
 
   const kpis = [
-    { label: 'Total prospects', value: fmt.number(Number(data?.prospects?.total ?? 0)), sub: `+${data?.prospects?.this_month ?? 0} ce mois`, icon: Users, color: 'blue' },
-    { label: 'Campagnes actives', value: String(data?.campaigns?.running ?? 0), sub: `${data?.campaigns?.total ?? 0} au total`, icon: Mail, color: 'green' },
-    { label: 'Score moyen', value: `${data?.prospects?.avg_score ?? 0}/100`, sub: 'Qualité des prospects', icon: TrendingUp, color: 'amber' },
-    { label: 'Pipeline', value: fmt.currency(Number(data?.deals?.pipeline ?? 0)), sub: `${fmt.currency(Number(data?.deals?.won_value ?? 0))} gagnés`, icon: DollarSign, color: 'purple' },
+    { label: 'Prospects', value: fmt.number(Number(data?.p?.total ?? 0)), sub: `+${data?.p?.this_month ?? 0} ce mois`, color: '#3b82f6', bg: 'rgba(59,130,246,.12)', border: 'rgba(59,130,246,.25)', emoji: '👥' },
+    { label: 'Campagnes actives', value: String(data?.c?.running ?? 0), sub: `${data?.c?.total ?? 0} au total`, color: '#4ade80', bg: 'rgba(74,222,128,.10)', border: 'rgba(74,222,128,.2)', emoji: '📧' },
+    { label: 'Score moyen', value: `${data?.p?.avg_score ?? 0}`, sub: 'sur 100 pts', color: '#60a5fa', bg: 'rgba(96,165,250,.1)', border: 'rgba(96,165,250,.2)', emoji: '⭐' },
+    { label: 'Pipeline', value: fmt.currency(Number(data?.d?.pipeline ?? 0)), sub: `${fmt.currency(Number(data?.d?.won_value ?? 0))} gagnés`, color: '#fbbf24', bg: 'rgba(251,191,36,.1)', border: 'rgba(251,191,36,.2)', emoji: '💰' },
   ];
-
-  const colors = {
-    blue: 'bg-blue-50 text-blue-600',
-    green: 'bg-emerald-50 text-emerald-600',
-    amber: 'bg-amber-50 text-amber-600',
-    purple: 'bg-purple-50 text-purple-600',
-  };
-
-  const getHour = () => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Bonjour';
-    if (h < 18) return 'Bon après-midi';
-    return 'Bonsoir';
-  };
 
   const byStatusList = Array.isArray(data?.byStatus) ? data.byStatus : [];
   const recentList = Array.isArray(data?.recent) ? data.recent : [];
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">{getHour()}, {session?.name.split(' ')[0]} 👋</h1>
-        <p className="text-slate-500 text-sm mt-1">Voici un aperçu de votre activité commerciale</p>
+        <h1 style={S.h1}>{greeting}, {session?.name?.split(' ')[0]} 👋</h1>
+        <p style={{ ...S.txt2, fontSize: 12, marginTop: 4 }}>Vue d&apos;ensemble de votre activité · NOF PROSPECT PROD</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map(k => {
-          const Icon = k.icon;
-          return (
-            <div key={k.label} className="card p-5 card-hover">
-              <div className="flex items-start justify-between mb-4">
-                <div className={`p-2.5 rounded-xl ${colors[k.color]}`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-              </div>
-              <p className="text-2xl font-bold text-slate-900">{k.value}</p>
-              <p className="text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wide">{k.label}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{k.sub}</p>
+      {/* KPI Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+        {kpis.map(k => (
+          <div key={k.label} style={{ ...S.card, padding: 20, transition: 'transform 200ms ease', cursor: 'default' }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'none'}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={S.label}>{k.label}</span>
+              <div style={{ width: 32, height: 32, background: k.bg, border: `1px solid ${k.border}`, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{k.emoji}</div>
             </div>
-          );
-        })}
+            <div style={{ fontSize: 26, fontWeight: 800, color: k.color, letterSpacing: '-.5px' }}>{k.value}</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.35)', marginTop: 4 }}>{k.sub}</div>
+          </div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="card p-5">
-          <h3 className="font-semibold text-slate-900 mb-4">Prospects par statut</h3>
-          <div className="space-y-3">
-            {byStatusList.map((s, i) => {
-              const total = Number(data?.prospects?.total ?? 1);
+      {/* 2 columns */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {/* Status breakdown */}
+        <div style={{ ...S.card, padding: 20 }}>
+          <div style={S.h3}>Prospects par statut</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {byStatusList.length === 0 ? (
+              <p style={{ ...S.txt2, fontSize: 12, textAlign: 'center', padding: '20px 0' }}>Aucun prospect encore</p>
+            ) : byStatusList.map((s, i) => {
+              const total = Number(data?.p?.total ?? 1);
               const pct = Math.round((Number(s.count) / total) * 100);
-              const cfg = STATUS[s.status] ?? { label: s.status, color: 'bg-slate-100 text-slate-600' };
+              const cfg = STATUS[s.status] ?? { label: s.status };
               return (
                 <div key={i}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className={`badge ${cfg.color}`}>{cfg.label}</span>
-                    <span className="text-sm font-bold text-slate-700">{s.count} <span className="text-slate-400 font-normal text-xs">({pct}%)</span></span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span className={`badge ${cfg.cls}`} style={{ fontSize: 11 }}>{cfg.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#f0f9ff' }}>{s.count} <span style={{ color: 'rgba(255,255,255,.3)', fontWeight: 400 }}>({pct}%)</span></span>
                   </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                  <div style={{ height: 4, background: 'rgba(255,255,255,.07)', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg,#3b82f6,#60a5fa)', borderRadius: 4, transition: 'width .5s ease' }} />
                   </div>
                 </div>
               );
             })}
-            {byStatusList.length === 0 && <p className="text-slate-400 text-sm text-center py-8">Aucun prospect encore</p>}
           </div>
         </div>
 
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-slate-900">Derniers prospects</h3>
-            <a href="/prospects" className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium">
-              Voir tous <ArrowUpRight className="w-3 h-3" />
-            </a>
+        {/* Recent prospects */}
+        <div style={{ ...S.card, padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={S.h3}>Derniers prospects</div>
+            <a href="/prospects" style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', fontWeight: 600 }}>Voir tous →</a>
           </div>
-          <div className="space-y-3">
-            {recentList.map((p, i) => (
-              <div key={i} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition-colors">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm shadow-blue-200">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {recentList.length === 0 ? (
+              <p style={{ ...S.txt2, fontSize: 12, textAlign: 'center', padding: '20px 0' }}>Aucun prospect encore</p>
+            ) : recentList.map((p, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 9, transition: 'background 150ms' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.04)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <div style={{ width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg,#3b82f6,#6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
                   {p.first_name[0]}{p.last_name[0]}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-900 truncate">{p.first_name} {p.last_name}</p>
-                  <p className="text-xs text-slate-400 truncate">{p.company ?? '—'}</p>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f9ff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.first_name} {p.last_name}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.company || '—'}</div>
                 </div>
-                <span className={`badge ring-1 ${scoreColor(p.score)}`}>{p.score}</span>
+                <span className={`badge ${scoreColor(p.score)}`} style={{ fontSize: 11, flexShrink: 0 }}>{p.score}</span>
               </div>
             ))}
-            {recentList.length === 0 && <p className="text-slate-400 text-sm text-center py-8">Aucun prospect encore</p>}
           </div>
         </div>
       </div>
 
-      <div className="card p-5">
-        <h3 className="font-semibold text-slate-900 mb-4">Actions rapides</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Quick actions */}
+      <div style={{ ...S.card, padding: 20 }}>
+        <div style={S.h3}>Actions rapides</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {[
             { label: 'Ajouter un prospect', href: '/prospects', emoji: '👤', desc: 'Créer manuellement' },
-            { label: 'Nouvelle campagne', href: '/campaigns', emoji: '📧', desc: 'Avec IA' },
+            { label: 'Nouvelle campagne', href: '/campaigns', emoji: '📧', desc: 'Avec génération IA' },
             { label: 'Créer un deal', href: '/pipeline', emoji: '💼', desc: 'Pipeline CRM' },
             { label: 'Rechercher', href: '/search', emoji: '🔍', desc: 'Trouver des prospects' },
           ].map(a => (
-            <a key={a.label} href={a.href}
-              className="flex flex-col items-center gap-2 p-4 bg-slate-50 rounded-xl hover:bg-blue-50 hover:border-blue-200 border border-transparent transition-all text-center card-hover">
-              <span className="text-3xl">{a.emoji}</span>
+            <a key={a.label} href={a.href} style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+              padding: '16px 12px',
+              background: 'rgba(255,255,255,.04)',
+              border: '0.5px solid rgba(255,255,255,.08)',
+              borderRadius: 12, textDecoration: 'none',
+              transition: 'all 150ms ease',
+              textAlign: 'center',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59,130,246,.12)'; e.currentTarget.style.borderColor = 'rgba(59,130,246,.3)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,.08)'; e.currentTarget.style.transform = 'none'; }}
+            >
+              <span style={{ fontSize: 28 }}>{a.emoji}</span>
               <div>
-                <p className="text-xs font-semibold text-slate-700">{a.label}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{a.desc}</p>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#f0f9ff' }}>{a.label}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,.35)', marginTop: 2 }}>{a.desc}</div>
               </div>
             </a>
           ))}
