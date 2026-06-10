@@ -7,9 +7,10 @@ if (!process.env.DATABASE_URL) {
 
 const sql = postgres(process.env.DATABASE_URL, {
   ssl: 'require',
-  max: 10,
-  idle_timeout: 20,
+  max: 3,
+  idle_timeout: 10,
   connect_timeout: 10,
+  max_lifetime: 60 * 10,
 });
 
 export default sql;
@@ -26,10 +27,7 @@ export async function initDB() {
     created_at TIMESTAMPTZ DEFAULT NOW()
   )`;
 
-  // Add must_change_password column if missing (migration)
-  await sql`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE
-  `.catch(() => {});
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE`.catch(() => {});
 
   await sql`CREATE TABLE IF NOT EXISTS prospects (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
