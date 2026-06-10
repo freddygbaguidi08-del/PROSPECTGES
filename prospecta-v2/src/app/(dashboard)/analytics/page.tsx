@@ -1,122 +1,115 @@
 // @ts-nocheck
 'use client';
-import { useEffect, useState } from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { fmt, STATUS } from '@/lib/utils';
-import { Users, Mail, TrendingUp, DollarSign } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { fmt, STATUS, DEAL_STAGES } from '@/lib/utils';
 
-interface DashData {
-  prospects: { total: string; this_month: string; avg_score: string };
-  campaigns: { total: string; running: string };
-  deals: { total: string; won_value: string; pipeline: string };
-  prospectsByStatus: Array<{ status: string; count: string }>;
-  recentProspects: Array<{ first_name: string; last_name: string; company: string; score: number }>;
-}
-
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#6b7280'];
+const glass = { background:'rgba(255,255,255,.06)', backdropFilter:'blur(24px) saturate(180%)', WebkitBackdropFilter:'blur(24px) saturate(180%)', border:'0.5px solid rgba(255,255,255,.10)', borderRadius:14, boxShadow:'0 8px 32px rgba(0,0,0,.4)' };
 
 export default function AnalyticsPage() {
-  const [data, setData] = useState<DashData | null>(null);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch('/api/analytics').then(r => r.json()).then(d => {
-      setData((d as { data: DashData }).data);
+      setData(d.data);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
-  const kpis = data ? [
-    { label: 'Total prospects', value: fmt.number(Number(data.prospects.total)), sub: `+${data.prospects.this_month} ce mois`, icon: Users, color: 'blue' },
-    { label: 'Score moyen', value: `${data.prospects.avg_score ?? 0}/100`, sub: 'Qualité ICP', icon: TrendingUp, color: 'green' },
-    { label: 'Campagnes actives', value: String(data.campaigns.running), sub: `${data.campaigns.total} total`, icon: Mail, color: 'amber' },
-    { label: 'Pipeline', value: fmt.currency(Number(data.deals.pipeline)), sub: `${fmt.currency(Number(data.deals.won_value))} gagnés`, icon: DollarSign, color: 'purple' },
-  ] : [];
+  const kpis = [
+    { label:'Prospects total', value:fmt.number(Number(data?.prospects?.total??0)), sub:`Score moyen: ${data?.prospects?.avg_score??0}/100`, color:'#3b82f6' },
+    { label:'Ce mois', value:fmt.number(Number(data?.prospects?.this_month??0)), sub:'Nouveaux prospects', color:'#60a5fa' },
+    { label:'Campagnes actives', value:String(data?.campaigns?.running??0), sub:`${data?.campaigns?.total??0} campagnes total`, color:'#4ade80' },
+    { label:'Pipeline', value:fmt.currency(Number(data?.deals?.pipeline??0)), sub:`${fmt.currency(Number(data?.deals?.won_value??0))} gagnés`, color:'#fbbf24' },
+  ];
 
-  const colors: Record<string, string> = { blue: 'bg-blue-50 text-blue-600', green: 'bg-emerald-50 text-emerald-600', amber: 'bg-amber-50 text-amber-600', purple: 'bg-purple-50 text-purple-600' };
-
-  const pieData = (data?.prospectsByStatus ?? []).map(s => ({
-    name: STATUS[s.status]?.label ?? s.status,
-    value: Number(s.count),
-  }));
-
-  const barData = (data?.prospectsByStatus ?? []).map(s => ({
-    status: STATUS[s.status]?.label ?? s.status,
-    count: Number(s.count),
-  }));
+  const byStatus = Array.isArray(data?.prospectsByStatus) ? data.prospectsByStatus : [];
+  const recent = Array.isArray(data?.recentProspects) ? data.recentProspects : [];
+  const totalPros = Number(data?.prospects?.total??1);
 
   return (
-    <div className="space-y-6">
+    <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Analytics</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Vue globale de vos performances</p>
+        <h1 style={{ fontSize:20, fontWeight:700, color:'#f0f9ff', letterSpacing:'-.3px' }}>◎ Analytics</h1>
+        <p style={{ fontSize:12, color:'rgba(255,255,255,.4)', marginTop:4 }}>Tableau de bord de performance commerciale</p>
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-28 bg-white rounded-2xl border border-slate-200/80 animate-pulse" />)}
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {kpis.map(k => {
-              const Icon = k.icon;
+      {/* KPIs */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 }}>
+        {kpis.map(k => (
+          <div key={k.label} style={{ ...glass, padding:20 }}>
+            {loading ? <div style={{ height:28, background:'rgba(255,255,255,.06)', borderRadius:6, marginBottom:8 }} /> : (
+              <div style={{ fontSize:26, fontWeight:800, color:k.color, letterSpacing:'-.5px' }}>{k.value}</div>
+            )}
+            <div style={{ fontSize:10, fontWeight:700, color:'rgba(255,255,255,.4)', textTransform:'uppercase', letterSpacing:'.5px', marginTop:6 }}>{k.label}</div>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,.3)', marginTop:2 }}>{k.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+        {/* Status breakdown */}
+        <div style={{ ...glass, padding:20 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#f0f9ff', marginBottom:16 }}>Répartition par statut</div>
+          {loading ? <div style={{ height:120, background:'rgba(255,255,255,.03)', borderRadius:9 }} /> :
+            byStatus.length === 0 ? <p style={{ color:'rgba(255,255,255,.3)', fontSize:12, textAlign:'center', padding:'24px 0' }}>Aucune donnée</p> :
+            byStatus.map((s,i) => {
+              const pct = Math.round((Number(s.count)/totalPros)*100);
+              const cfg = STATUS[s.status] ?? { label:s.status, cls:'' };
               return (
-                <div key={k.label} className="bg-white rounded-2xl border border-slate-200/80 p-5">
-                  <div className={`inline-flex p-2.5 rounded-xl mb-3 ${colors[k.color]}`}>
-                    <Icon className="w-5 h-5" />
+                <div key={i} style={{ marginBottom:14 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
+                    <span className={`badge ${cfg.cls}`} style={{ fontSize:11 }}>{cfg.label}</span>
+                    <span style={{ fontSize:12, fontWeight:600, color:'#f0f9ff' }}>{s.count} <span style={{ color:'rgba(255,255,255,.3)', fontWeight:400 }}>({pct}%)</span></span>
                   </div>
-                  <p className="text-2xl font-bold text-slate-900">{k.value}</p>
-                  <p className="text-xs font-medium text-slate-500 mt-0.5">{k.label}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">{k.sub}</p>
+                  <div style={{ height:5, background:'rgba(255,255,255,.07)', borderRadius:4, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:`${pct}%`, background:'linear-gradient(90deg,#3b82f6,#60a5fa)', borderRadius:4, transition:'width .5s ease' }} />
+                  </div>
                 </div>
               );
-            })}
-          </div>
+            })
+          }
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-5">
-              <h3 className="font-semibold text-slate-900 mb-4">Prospects par statut</h3>
-              {pieData.length > 0 ? (
-                <>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}>
-                        {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {pieData.map((d, i) => (
-                      <div key={d.name} className="flex items-center gap-2 text-xs">
-                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                        <span className="text-slate-600">{d.name}</span>
-                        <span className="font-semibold text-slate-900 ml-auto">{d.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : <p className="text-slate-400 text-sm text-center py-10">Aucune donnée</p>}
-            </div>
-
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-5">
-              <h3 className="font-semibold text-slate-900 mb-4">Distribution par statut</h3>
-              {barData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={barData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                    <YAxis dataKey="status" type="category" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={80} />
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0' }} />
-                    <Bar dataKey="count" name="Prospects" fill="#3b82f6" radius={[0, 6, 6, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : <p className="text-slate-400 text-sm text-center py-10">Aucune donnée</p>}
-            </div>
+        {/* Recent prospects */}
+        <div style={{ ...glass, padding:20 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#f0f9ff' }}>Derniers prospects</div>
+            <a href="/prospects" style={{ fontSize:11, color:'#60a5fa', textDecoration:'none', fontWeight:600 }}>Voir tous →</a>
           </div>
-        </>
-      )}
+          {loading ? <div style={{ height:120, background:'rgba(255,255,255,.03)', borderRadius:9 }} /> :
+            recent.length === 0 ? <p style={{ color:'rgba(255,255,255,.3)', fontSize:12, textAlign:'center', padding:'24px 0' }}>Aucun prospect</p> :
+            recent.map((p,i) => (
+              <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 8px', borderRadius:9, marginBottom:4 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.04)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <div style={{ width:30, height:30, borderRadius:9, background:'linear-gradient(135deg,#3b82f6,#6366f1)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#fff', flexShrink:0 }}>
+                  {p.first_name[0]}{p.last_name[0]}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:'#f0f9ff', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.first_name} {p.last_name}</div>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,.35)' }}>{p.company||'—'}</div>
+                </div>
+                <div style={{ fontSize:12, fontWeight:700, color:'#f0f9ff', flexShrink:0 }}>{p.score}<span style={{ fontSize:10, color:'rgba(255,255,255,.3)' }}>/100</span></div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      {/* Pipeline stages */}
+      <div style={{ ...glass, padding:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#f0f9ff', marginBottom:16 }}>État du pipeline</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:10 }}>
+          {DEAL_STAGES.map(s => (
+            <div key={s.key} style={{ background:'rgba(255,255,255,.04)', border:'0.5px solid rgba(255,255,255,.08)', borderRadius:10, padding:'12px 10px', textAlign:'center' }}>
+              <div style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,.5)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.label}</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,.3)' }}>{s.prob}%</div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
