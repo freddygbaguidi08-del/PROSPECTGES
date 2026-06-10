@@ -1,338 +1,243 @@
 // @ts-nocheck
 'use client';
-import { useState, useEffect } from 'react';
-import { Mail, MailOpen, Send, X, Sparkles, Filter, RefreshCw } from 'lucide-react';
-import { fmt, cn } from '@/lib/utils';
+import { useState, useEffect, useCallback, memo } from 'react';
+import { toast } from '@/components/ui/Toaster';
+import { fmt } from '@/lib/utils';
 
-interface EmailLog {
-  id: string;
-  to_email: string;
-  subject: string;
-  status: string;
-  open_count: number;
-  sent_at: string;
-  first_name?: string;
-  last_name?: string;
-  company?: string;
-  campaign_name?: string;
-}
+const glass = { background:'rgba(255,255,255,.06)', backdropFilter:'blur(24px) saturate(180%)', WebkitBackdropFilter:'blur(24px) saturate(180%)', border:'0.5px solid rgba(255,255,255,.10)', borderRadius:14, boxShadow:'0 8px 32px rgba(0,0,0,.4)' };
+const inp = { width:'100%', padding:'9px 12px', background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, color:'#f0f9ff', fontSize:13, fontFamily:'Inter,sans-serif', outline:'none' };
+const lbl = { display:'block', fontSize:10, fontWeight:700, color:'rgba(255,255,255,.4)', marginBottom:5, letterSpacing:'.8px', textTransform:'uppercase' };
+const btnP = { padding:'9px 18px', background:'linear-gradient(135deg,#3b82f6,#1d4ed8)', border:'none', borderRadius:10, color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer', boxShadow:'0 2px 12px rgba(59,130,246,.3)', display:'inline-flex', alignItems:'center', gap:6 };
 
-interface Stats {
-  total: string;
-  opened: string;
-  sent: string;
-}
+const STATUS_CFG = {
+  SENT: { label:'Envoyé', color:'rgba(59,130,246,.15)', border:'rgba(59,130,246,.3)', text:'#60a5fa', dot:'#3b82f6' },
+  OPENED: { label:'Ouvert', color:'rgba(74,222,128,.12)', border:'rgba(74,222,128,.25)', text:'#4ade80', dot:'#4ade80' },
+  CLICKED: { label:'Cliqué', color:'rgba(167,139,250,.12)', border:'rgba(167,139,250,.25)', text:'#c4b5fd', dot:'#a78bfa' },
+  BOUNCED: { label:'Rebond', color:'rgba(248,113,113,.1)', border:'rgba(248,113,113,.25)', text:'#f87171', dot:'#f87171' },
+};
+
+// SendForm defined OUTSIDE to avoid focus loss
+const SendForm = memo(function SendForm({ onSend, sending, aiLoading, onGenerate }) {
+  const [email, setEmail] = useState({ to:'', toName:'', subject:'', body:'', fromName:'', fromEmail:'' });
+  const [aiCfg, setAiCfg] = useState({ prospectName:'', company:'', jobTitle:'', goal:'Obtenir un RDV de 20 minutes', tone:'friendly', language:'fr' });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await onSend(email);
+    setEmail({ to:'', toName:'', subject:'', body:'', fromName:'', fromEmail:'' });
+  };
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      {/* AI panel */}
+      <div style={{ background:'rgba(59,130,246,.08)', border:'1px solid rgba(59,130,246,.2)', borderRadius:12, padding:'14px 16px' }}>
+        <div style={{ fontSize:12, fontWeight:700, color:'#60a5fa', marginBottom:12 }}>✦ Génération intelligente</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+          {[['prospectName','Nom prospect','Jean Martin'],['company','Entreprise','Acme Corp'],['jobTitle','Poste','CEO'],['goal','Objectif','RDV 20 min']].map(([k,l,p]) => (
+            <div key={k}>
+              <label style={lbl}>{l}</label>
+              <input value={aiCfg[k]} onChange={e => setAiCfg(c => ({ ...c, [k]:e.target.value }))}
+                style={{ ...inp, fontSize:12, padding:'7px 10px' }} placeholder={p} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr auto', gap:10, alignItems:'flex-end' }}>
+          <div>
+            <label style={lbl}>Registre</label>
+            <select value={aiCfg.tone} onChange={e => setAiCfg(c => ({ ...c, tone:e.target.value }))} style={{ ...inp, fontSize:12, padding:'7px 10px' }}>
+              <option value="friendly">Amical</option><option value="formal">Formel</option><option value="direct">Direct</option>
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Langue</label>
+            <select value={aiCfg.language} onChange={e => setAiCfg(c => ({ ...c, language:e.target.value }))} style={{ ...inp, fontSize:12, padding:'7px 10px' }}>
+              <option value="fr">Français</option><option value="en">English</option>
+            </select>
+          </div>
+          <button onClick={() => onGenerate(aiCfg, (s,b) => setEmail(e => ({ ...e, subject:s, body:b })))} disabled={aiLoading}
+            style={{ padding:'8px 14px', background:aiLoading?'rgba(59,130,246,.4)':'linear-gradient(135deg,#3b82f6,#1d4ed8)', border:'none', borderRadius:9, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+            {aiLoading?'◌ ...':'✦ Générer'}
+          </button>
+        </div>
+      </div>
+
+      {/* Email form */}
+      <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          {[['to','Destinataire (email) *','email','contact@entreprise.com',true],['toName','Nom destinataire','text','Jean Martin',false],['fromName','Votre nom','text','',false],['fromEmail','Votre email','email','',false]].map(([k,l,t,p,req]) => (
+            <div key={k}>
+              <label style={lbl}>{l}</label>
+              <input type={t} required={req} value={email[k]} onChange={e => setEmail(v => ({ ...v, [k]:e.target.value }))}
+                style={inp} placeholder={p} />
+            </div>
+          ))}
+        </div>
+        <div>
+          <label style={lbl}>Objet *</label>
+          <input required value={email.subject} onChange={e => setEmail(v => ({ ...v, subject:e.target.value }))} style={inp} placeholder="Objet de l'email..." />
+        </div>
+        <div>
+          <label style={lbl}>Message *</label>
+          <textarea required value={email.body} onChange={e => setEmail(v => ({ ...v, body:e.target.value }))}
+            rows={8} style={{ ...inp, resize:'none', lineHeight:1.7 }} placeholder="Corps de l'email..." />
+        </div>
+        <div style={{ display:'flex', gap:10 }}>
+          <button type="submit" disabled={sending} style={{ ...btnP, flex:1, justifyContent:'center', opacity:sending?.5:1 }}>
+            {sending?'◌ Envoi en cours...':'↑ Envoyer l\'email'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+});
 
 export default function InboxPage() {
-  const [logs, setLogs] = useState<EmailLog[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [logs, setLogs] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [showSend, setShowSend] = useState(false);
   const [sending, setSending] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
-  const [sendResult, setSendResult] = useState('');
 
-  const [email, setEmail] = useState({
-    to: '', toName: '', subject: '', body: '', fromName: '', fromEmail: '',
-  });
-  const [aiConfig, setAiConfig] = useState({
-    prospectName: '', company: '', jobTitle: '', goal: 'Obtenir un RDV de 20 minutes', tone: 'friendly', language: 'fr',
-  });
-
-  const load = async (f = filter) => {
+  const load = useCallback(async (f = filter) => {
     setLoading(true);
     const res = await fetch(`/api/inbox?filter=${f}`);
-    const data = await res.json() as { data: EmailLog[]; stats: Stats };
+    const data = await res.json();
     setLogs(data.data ?? []);
     setStats(data.stats ?? null);
     setLoading(false);
-  };
+  }, [filter]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSending(true); setSendResult('');
+  const handleSend = useCallback(async (email) => {
+    setSending(true);
     const res = await fetch('/api/email/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST', headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify(email),
     });
-    const data = await res.json() as { success?: boolean; error?: string; demo?: boolean; message?: string };
+    const data = await res.json();
     if (data.success) {
-      setSendResult(data.demo ? '✅ ' + data.message : '✅ Email envoyé avec succès !');
-      setEmail({ to: '', toName: '', subject: '', body: '', fromName: '', fromEmail: '' });
+      toast.success(data.demo ? data.message : 'Email envoyé avec succès');
+      setShowSend(false);
       load();
     } else {
-      setSendResult('❌ ' + data.error);
+      toast.error(data.error || 'Erreur lors de l\'envoi');
     }
     setSending(false);
-  };
+  }, [load]);
 
-  const generateAI = async () => {
+  const handleGenerate = useCallback(async (aiCfg, onResult) => {
     setAiLoading(true);
-    const res = await fetch('/api/ai', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'generate',
-        prospectName: aiConfig.prospectName,
-        company: aiConfig.company,
-        jobTitle: aiConfig.jobTitle,
-        goal: aiConfig.goal,
-        tone: aiConfig.tone,
-        language: aiConfig.language,
-      }),
-    });
-    const data = await res.json() as { data?: { subject: string; body: string } };
-    if (data.data) {
-      setEmail(p => ({ ...p, subject: data.data!.subject, body: data.data!.body }));
-    }
+    try {
+      const res = await fetch('/api/ai', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ action:'generate', ...aiCfg }),
+      });
+      const data = await res.json();
+      if (data.data) {
+        onResult(data.data.subject, data.data.body);
+        toast.success(`Généré via ${data.data.provider}`);
+      } else toast.error(data.error || 'Erreur');
+    } catch(e) { toast.error(e.message); }
     setAiLoading(false);
-  };
+  }, []);
 
-  const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-    SENT: { label: 'Envoyé', color: 'bg-blue-50 text-blue-700', icon: Mail },
-    OPENED: { label: 'Ouvert', color: 'bg-emerald-50 text-emerald-700', icon: MailOpen },
-    CLICKED: { label: 'Cliqué', color: 'bg-purple-50 text-purple-700', icon: MailOpen },
-    BOUNCED: { label: 'Rebond', color: 'bg-red-50 text-red-600', icon: Mail },
-  };
+  const openRate = stats && Number(stats.total) > 0
+    ? Math.round((Number(stats.opened) / Number(stats.total)) * 100)
+    : 0;
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
+    <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Boîte d&apos;envoi</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {stats ? `${stats.total} emails · ${stats.opened} ouverts` : 'Chargement...'}
+          <h1 style={{ fontSize:20, fontWeight:700, color:'#f0f9ff', letterSpacing:'-.3px' }}>◎ Boîte d'envoi</h1>
+          <p style={{ fontSize:12, color:'rgba(255,255,255,.4)', marginTop:4 }}>
+            {stats ? `${stats.total} email(s) envoyé(s) · ${openRate}% d'ouverture` : 'Chargement...'}
           </p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => load()} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition">
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          <button onClick={() => setShowSend(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition">
-            <Send className="w-4 h-4" /> Envoyer un email
-          </button>
-        </div>
+        <button onClick={() => setShowSend(!showSend)} style={btnP}>
+          {showSend ? '✕ Fermer' : '↑ Envoyer un email'}
+        </button>
       </div>
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: 'Total envoyés', value: stats.total, color: 'blue' },
-            { label: 'Ouverts', value: stats.opened, color: 'emerald' },
-            { label: 'Taux ouverture', value: Number(stats.total) > 0 ? `${Math.round((Number(stats.opened) / Number(stats.total)) * 100)}%` : '0%', color: 'purple' },
-          ].map(s => (
-            <div key={s.label} className="bg-white rounded-2xl border border-slate-200/80 p-4">
-              <p className="text-xs text-slate-500">{s.label}</p>
-              <p className={`text-2xl font-bold mt-1 text-${s.color}-600`}>{s.value}</p>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
+          {[['Total envoyés',stats.total,'#3b82f6'],['Ouverts',stats.opened,'#4ade80'],['Taux d\'ouverture',`${openRate}%`,'#fbbf24']].map(([l,v,c]) => (
+            <div key={l} style={{ ...glass, padding:18 }}>
+              <div style={{ fontSize:24, fontWeight:800, color:c }}>{v}</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,.4)', marginTop:4, textTransform:'uppercase', letterSpacing:'.5px' }}>{l}</div>
             </div>
           ))}
         </div>
       )}
 
+      {/* Send form */}
+      {showSend && (
+        <div style={{ ...glass, padding:24 }}>
+          <div style={{ fontSize:14, fontWeight:700, color:'#f0f9ff', marginBottom:16 }}>Nouveau message</div>
+          <SendForm onSend={handleSend} sending={sending} aiLoading={aiLoading} onGenerate={handleGenerate} />
+        </div>
+      )}
+
       {/* Filters */}
-      <div className="flex gap-2">
-        {[
-          { key: 'all', label: 'Tous' },
-          { key: 'sent', label: 'Envoyés' },
-          { key: 'opened', label: 'Ouverts' },
-        ].map(f => (
-          <button key={f.key} onClick={() => { setFilter(f.key); load(f.key); }}
-            className={cn('px-3 py-1.5 rounded-xl text-sm font-medium transition',
-              filter === f.key ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50')}>
-            {f.label}
+      <div style={{ display:'flex', gap:8 }}>
+        {[['all','Tous'],['sent','Envoyés'],['opened','Ouverts']].map(([k,l]) => (
+          <button key={k} onClick={() => { setFilter(k); load(k); }}
+            style={{ padding:'7px 14px', background:filter===k?'linear-gradient(135deg,#3b82f6,#1d4ed8)':'rgba(255,255,255,.06)', border:`0.5px solid ${filter===k?'transparent':'rgba(255,255,255,.10)'}`, borderRadius:9, color:filter===k?'#fff':'rgba(255,255,255,.6)', fontSize:12, fontWeight:filter===k?600:400, cursor:'pointer' }}>
+            {l}
           </button>
         ))}
       </div>
 
-      {/* Email list */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden">
+      {/* Log list */}
+      <div style={{ ...glass, overflow:'hidden' }}>
         {loading ? (
-          <div className="divide-y divide-slate-50">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="px-5 py-4 flex gap-4">
-                <div className="w-9 h-9 bg-slate-100 rounded-full animate-pulse" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-slate-100 rounded animate-pulse w-2/3" />
-                  <div className="h-3 bg-slate-100 rounded animate-pulse w-1/3" />
-                </div>
-              </div>
-            ))}
+          <div style={{ padding:20 }}>
+            {[1,2,3,4,5].map(i => <div key={i} style={{ height:52, background:'rgba(255,255,255,.04)', borderRadius:9, marginBottom:8 }} />)}
           </div>
         ) : logs.length === 0 ? (
-          <div className="py-20 text-center">
-            <Mail className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-            <h3 className="font-semibold text-slate-700">Aucun email</h3>
-            <p className="text-sm text-slate-400 mt-1 mb-5">Envoyez votre premier email de prospection</p>
-            <button onClick={() => setShowSend(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition">
-              Envoyer un email
-            </button>
+          <div style={{ padding:'60px 20px', textAlign:'center' }}>
+            <div style={{ fontSize:40, opacity:.3, marginBottom:12 }}>◎</div>
+            <p style={{ color:'rgba(255,255,255,.5)', fontSize:13 }}>Aucun email envoyé pour l'instant</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-50">
+          <div>
+            {/* Header */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', padding:'10px 20px', borderBottom:'0.5px solid rgba(255,255,255,.06)', background:'rgba(255,255,255,.02)' }}>
+              {['Email / Destinataire','Statut','Date'].map(h => (
+                <div key={h} style={{ fontSize:10, fontWeight:700, color:'rgba(255,255,255,.3)', letterSpacing:'.5px', textTransform:'uppercase' }}>{h}</div>
+              ))}
+            </div>
             {logs.map(log => {
-              const cfg = statusConfig[log.status] ?? statusConfig.SENT;
-              const Icon = cfg.icon;
+              const cfg = STATUS_CFG[log.status] ?? STATUS_CFG.SENT;
               return (
-                <div key={log.id} className="px-5 py-4 hover:bg-slate-50/50 transition flex items-center gap-4">
-                  <div className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0', cfg.color)}>
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-semibold text-slate-900 truncate">{log.subject}</p>
-                      <span className={cn('shrink-0 text-xs px-1.5 py-0.5 rounded-full font-medium', cfg.color)}>
-                        {cfg.label}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
-                      <span>À: {log.first_name ? `${log.first_name} ${log.last_name}` : log.to_email}</span>
-                      {log.company && <span>· {log.company}</span>}
-                      {log.campaign_name && <span className="text-blue-500">· {log.campaign_name}</span>}
+                <div key={log.id} style={{ display:'grid', gridTemplateColumns:'1fr auto auto', padding:'12px 20px', borderBottom:'0.5px solid rgba(255,255,255,.04)', gap:16, alignItems:'center' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:600, color:'#f0f9ff', marginBottom:2 }}>{log.subject}</div>
+                    <div style={{ fontSize:11, color:'rgba(255,255,255,.35)' }}>
+                      {log.first_name ? `${log.first_name} ${log.last_name}` : log.to_email}
+                      {log.company && ` · ${log.company}`}
+                      {log.campaign_name && <span style={{ color:'#60a5fa' }}> · {log.campaign_name}</span>}
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    {log.open_count > 0 && (
-                      <p className="text-xs font-medium text-emerald-600">{log.open_count} vue(s)</p>
-                    )}
-                    <p className="text-xs text-slate-400">{log.sent_at ? fmt.relative(log.sent_at) : '—'}</p>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <div style={{ width:6, height:6, borderRadius:'50%', background:cfg.dot }} />
+                    <span style={{ fontSize:11, fontWeight:600, color:cfg.text }}>{cfg.label}</span>
+                    {log.open_count > 0 && <span style={{ fontSize:11, color:'rgba(255,255,255,.3)' }}>({log.open_count}×)</span>}
                   </div>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,.3)', whiteSpace:'nowrap' }}>{log.sent_at ? fmt.relative(log.sent_at) : '—'}</div>
                 </div>
               );
             })}
           </div>
         )}
       </div>
-
-      {/* Send email modal */}
-      {showSend && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-lg">Envoyer un email</h3>
-              <button onClick={() => { setShowSend(false); setSendResult(''); }} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5">
-              {/* AI Generator */}
-              <div className="bg-blue-50 rounded-xl border border-blue-200 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-semibold text-blue-900">Générer avec IA</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  {[
-                    { key: 'prospectName', label: 'Nom du prospect', placeholder: 'Jean Martin' },
-                    { key: 'company', label: 'Entreprise', placeholder: 'Acme Corp' },
-                    { key: 'jobTitle', label: 'Poste', placeholder: 'Directeur Commercial' },
-                    { key: 'goal', label: 'Objectif', placeholder: 'RDV 20 min' },
-                  ].map(f => (
-                    <div key={f.key} className={f.key === 'goal' ? 'col-span-2' : ''}>
-                      <label className="block text-xs font-medium text-blue-800 mb-1">{f.label}</label>
-                      <input value={(aiConfig as any)[f.key]}
-                        onChange={e => setAiConfig(p => ({ ...p, [f.key]: e.target.value }))}
-                        className="w-full px-2 py-1.5 text-xs border border-blue-200 rounded-lg bg-white focus:outline-none"
-                        placeholder={f.placeholder} />
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <select value={aiConfig.tone} onChange={e => setAiConfig(p => ({ ...p, tone: e.target.value }))}
-                    className="text-xs border border-blue-200 rounded-lg px-2 py-1.5 bg-white flex-1">
-                    <option value="friendly">Amical</option>
-                    <option value="formal">Formel</option>
-                    <option value="direct">Direct</option>
-                  </select>
-                  <select value={aiConfig.language} onChange={e => setAiConfig(p => ({ ...p, language: e.target.value }))}
-                    className="text-xs border border-blue-200 rounded-lg px-2 py-1.5 bg-white flex-1">
-                    <option value="fr">Français</option>
-                    <option value="en">English</option>
-                  </select>
-                  <button onClick={generateAI} disabled={aiLoading}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition flex-1 justify-center">
-                    <Sparkles className="w-3 h-3" />
-                    {aiLoading ? 'Génération...' : 'Générer IA'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Email form */}
-              <form onSubmit={handleSend} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">À (email) *</label>
-                    <input required type="email" value={email.to}
-                      onChange={e => setEmail(p => ({ ...p, to: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      placeholder="contact@entreprise.com" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Nom du destinataire</label>
-                    <input value={email.toName}
-                      onChange={e => setEmail(p => ({ ...p, toName: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      placeholder="Jean Martin" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Votre nom</label>
-                    <input value={email.fromName}
-                      onChange={e => setEmail(p => ({ ...p, fromName: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      placeholder="Votre Nom" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Votre email</label>
-                    <input type="email" value={email.fromEmail}
-                      onChange={e => setEmail(p => ({ ...p, fromEmail: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      placeholder="vous@entreprise.com" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Objet *</label>
-                  <input required value={email.subject}
-                    onChange={e => setEmail(p => ({ ...p, subject: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    placeholder="Objet de l'email..." />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Message *</label>
-                  <textarea required value={email.body}
-                    onChange={e => setEmail(p => ({ ...p, body: e.target.value }))}
-                    rows={8} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
-                    placeholder="Corps de l'email..." />
-                </div>
-
-                {sendResult && (
-                  <div className={cn('p-3 rounded-xl text-sm', sendResult.startsWith('✅') ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>
-                    {sendResult}
-                  </div>
-                )}
-
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => { setShowSend(false); setSendResult(''); }}
-                    className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition">
-                    Annuler
-                  </button>
-                  <button type="submit" disabled={sending}
-                    className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition flex items-center justify-center gap-2">
-                    <Send className="w-4 h-4" />
-                    {sending ? 'Envoi...' : 'Envoyer'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
